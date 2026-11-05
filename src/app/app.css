@@ -1,0 +1,314 @@
+.app {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  /* Иначе элементы карты с z-index оказываются поверх наших кнопок. */
+  isolation: isolate;
+}
+
+/* Подпись источников карты не должна заходить под кнопки справа. */
+.maplibregl-ctrl-bottom-left {
+  max-width: calc(100% - 96px);
+}
+
+@media (max-width: 600px) {
+  /* На телефоне внизу кнопки, поэтому сообщения показываем сверху. */
+  .toast {
+    top: calc(60px + env(safe-area-inset-top));
+    bottom: auto;
+  }
+}
+
+/* ---- Кнопка аккаунта ---- */
+
+.account-button {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px 0 11px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-button:disabled {
+  color: var(--muted);
+  cursor: progress;
+}
+
+.gps-chip {
+  position: absolute;
+  top: calc(60px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  max-width: min(320px, calc(100vw - 76px));
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: var(--pending-soft);
+  box-shadow: var(--shadow-float);
+  color: #734900;
+  font-size: 14px;
+}
+
+.map-failure {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+/* ---- Кнопки справа внизу ---- */
+
+.fabs {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.fab {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.fab:active {
+  transform: scale(0.94);
+}
+
+.fab-add {
+  width: 66px;
+  height: 66px;
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.fab-complaint {
+  background: var(--danger);
+  color: #fff;
+  animation: fab-in 180ms ease-out;
+}
+
+@keyframes fab-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fab,
+  .fab-complaint {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ---- Выбор места метки ---- */
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px rgb(16 28 40 / 35%), 0 4px 10px rgb(16 28 40 / 40%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.placing-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 24px));
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+}
+
+.placing-bar .button {
+  flex: 1;
+}
+
+.placing-bar p {
+  font-size: 15px;
+  text-align: center;
+}
+
+/* ---- Окно метки на карте ---- */
+
+.marker-popup {
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+  padding-right: 14px;
+}
+
+.marker-popup-badge {
+  justify-self: start;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--pending-soft);
+  color: #734900;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.marker-popup-title {
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.marker-popup-caption {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.maplibregl-popup-content {
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-float);
+  font: inherit;
+  color: var(--ink);
+}
+
+.maplibregl-popup-close-button {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+}
+
+/* ---- Аккаунт ---- */
+
+.profile-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 15px;
+}
+
+.profile-list dt {
+  color: var(--muted);
+}
+
+.profile-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.section-title {
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.my-markers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-markers li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.my-marker-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.my-marker-main strong {
+  overflow-wrap: anywhere;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.status-approved {
+  color: var(--active);
+}
+
+.status-pending {
+  color: #8a5800;
+}
+
+.status-rejected,
+.status-removed {
+  color: var(--danger);
+}
+
+.confirm-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--danger-soft);
+  font-size: 15px;
+}
+
+.confirm-box .button {
+  flex: 1;
+}
+
+.complaint-target {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Значок reCAPTCHA нельзя скрывать, но он не должен закрывать кнопки справа внизу. */
+.grecaptcha-badge {
+  bottom: 96px !important;
+}

@@ -1,0 +1,203 @@
+rules_version = '2';
+
+// Правила доступа к базе. Именно они, а не интерфейс сайта, защищают данные:
+// любой запрос мимо сайта проходит через эти же проверки.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Кто делает запрос ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(id) {
+      return signedIn() && request.auth.uid == id;
+    }
+
+    function userPath(id) {
+      return /databases/$(database)/documents/users/$(id);
+    }
+
+    function ratePath(id) {
+      return /databases/$(database)/documents/rateLimits/$(id);
+    }
+
+    function isModerator() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/moderators/$(request.auth.uid));
+    }
+
+    // Аккаунт одобрен модерацией. Для остальных get() упадёт или вернёт другой статус,
+    // и запрос будет отклонён.
+    function isApproved() {
+      return signedIn() && get(userPath(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isNotBanned() {
+      return signedIn()
+        && (!exists(userPath(request.auth.uid))
+            || get(userPath(request.auth.uid)).data.status != 'banned');
+    }
+
+    // ---------- Проверки данных ----------
+
+    function text(value, minSize, maxSize) {
+      return value is string
+        && value.size() <= maxSize
+        && value.trim().size() >= minSize;
+    }
+
+    // Решение модератора: меняются только служебные поля, автор решения подделан быть не может.
+    function moderationUpdate(statuses) {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedBy', 'reviewedAt', 'rejectReason'])
+        && d.status in statuses
+        && d.reviewedBy == request.auth.uid
+        && d.reviewedAt == request.time
+        && (!('rejectReason' in d) || text(d.rejectReason, 0, 300));
+    }
+
+    function validConsents(c) {
+      return c.keys().hasOnly(['dataProcessing', 'privacyPolicy', 'version', 'acceptedAt'])
+        && c.keys().hasAll(['dataProcessing', 'privacyPolicy', 'version', 'acceptedAt'])
+        && c.dataProcessing == true
+        && c.privacyPolicy == true
+        && text(c.version, 1, 20)
+        && c.acceptedAt == request.time;
+    }
+
+    // Новый профиль. Телефон сверяется с токеном Firebase Auth, а туда он попадает
+    // только после ввода кода из SMS, поэтому подставить чужой номер нельзя.
+    function validNewProfile(id) {
+      let d = request.resource.data;
+      let token = request.auth.token;
+      let keys = ['uid', 'username', 'usernameLower', 'fullName', 'email', 'emailVerified',
+                  'phone', 'status', 'createdAt', 'consents'];
+      return d.keys().hasOnly(keys)
+        && d.keys().hasAll(keys)
+        && d.uid == id
+        && d.status == 'pending'
+        && d.createdAt == request.time
+        && d.username is string
+        && d.username.matches('^[A-Za-z0-9_.]{3,24}$')
+        && d.usernameLower == d.username.lower()
+        && text(d.fullName, 3, 100)
+        && d.email is string
+        && d.email.size() <= 254
+        && d.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && (token.get('email', null) == null || d.email == token.email)
+        && d.emailVerified == (token.get('email_verified', false) == true)
+        && d.phone == token.phone_number
+        && !exists(/databases/$(database)/documents/blockedPhones/$(d.phone))
+        && validConsents(d.consents)
+        && getAfter(/databases/$(database)/documents/usernames/$(d.usernameLower)).data.uid == id;
+    }
+
+    function validNewMarker() {
+      let d = request.resource.data;
+      let keys = ['title', 'caption', 'lat', 'lng', 'ownerId', 'status', 'createdAt'];
+      return d.keys().hasOnly(keys)
+        && d.keys().hasAll(keys)
+        && text(d.title, 1, 60)
+        && text(d.caption, 1, 280)
+        && d.lat is number && d.lat >= -90 && d.lat <= 90
+        && d.lng is number && d.lng >= -180 && d.lng <= 180
+        && d.ownerId == request.auth.uid
+        && d.status == 'pending'
+        && d.createdAt == request.time
+        // Метка создаётся только вместе с отметкой времени в rateLimits (см. ниже).
+        && getAfter(ratePath(request.auth.uid)).data.lastMarkerAt == request.time;
+    }
+
+    function validNewComplaint(id) {
+      let d = request.resource.data;
+      let keys = ['markerId', 'text', 'authorId', 'status', 'createdAt'];
+      return d.keys().hasOnly(keys)
+        && d.keys().hasAll(keys)
+        && d.markerId is string
+        // Один пользователь: одна жалоба на метку.
+        && id == d.markerId + '_' + request.auth.uid
+        && text(d.text, 10, 1000)
+        && d.authorId == request.auth.uid
+        && d.status == 'open'
+        && d.createdAt == request.time
+        && get(/databases/$(database)/documents/markers/$(d.markerId)).data.status == 'approved';
+    }
+
+    // ---------- Коллекции ----------
+
+    // Модераторы назначаются только вручную в консоли Firebase.
+    match /moderators/{id} {
+      allow get: if isSelf(id);
+      allow list, write: if false;
+    }
+
+    match /users/{id} {
+      allow get: if isSelf(id) || isModerator();
+      allow list: if isModerator();
+      allow create: if isSelf(id) && validNewProfile(id);
+      allow update: if isModerator()
+        && moderationUpdate(['pending', 'approved', 'rejected', 'banned']);
+      // Заблокированный не может стереть профиль, чтобы зарегистрироваться заново.
+      allow delete: if isSelf(id) && resource.data.status != 'banned';
+    }
+
+    // Занятые имена. Имя можно занять только вместе с созданием своего профиля
+    // и освободить только вместе с его удалением.
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow list, update: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(userPath(request.auth.uid)).data.usernameLower == name;
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && !existsAfter(userPath(request.auth.uid));
+    }
+
+    // Номера заблокированных: по ним нельзя зарегистрироваться повторно.
+    match /blockedPhones/{phone} {
+      allow read, write: if isModerator();
+    }
+
+    // Защита очереди модерации от спама: не чаще одной метки в 30 секунд.
+    match /rateLimits/{id} {
+      allow get: if isSelf(id);
+      allow list: if false;
+      allow create: if isSelf(id) && isApproved()
+        && request.resource.data.keys().hasOnly(['lastMarkerAt'])
+        && request.resource.data.lastMarkerAt == request.time;
+      allow update: if isSelf(id) && isApproved()
+        && request.resource.data.keys().hasOnly(['lastMarkerAt'])
+        && request.resource.data.lastMarkerAt == request.time
+        && request.time > resource.data.lastMarkerAt + duration.value(30, 's');
+      allow delete: if isSelf(id) && !existsAfter(userPath(id));
+    }
+
+    // Чужие метки видны только одобренным пользователям и только после модерации.
+    // Свои видны всегда: иначе при удалении аккаунта их нельзя было бы найти.
+    match /markers/{id} {
+      allow read: if isModerator()
+        || (signedIn() && resource.data.ownerId == request.auth.uid)
+        || (isApproved() && resource.data.status == 'approved');
+      allow create: if isApproved() && validNewMarker();
+      allow update: if isModerator()
+        && moderationUpdate(['pending', 'approved', 'rejected', 'removed']);
+      allow delete: if isModerator()
+        || (isNotBanned() && resource.data.ownerId == request.auth.uid);
+    }
+
+    match /complaints/{id} {
+      // resource == null: автор может проверить, не отправлял ли он уже жалобу.
+      allow get: if isModerator()
+        || (signedIn() && (resource == null || resource.data.authorId == request.auth.uid));
+      allow list: if isModerator();
+      allow create: if isApproved() && validNewComplaint(id);
+      allow update: if isModerator() && moderationUpdate(['open', 'resolved', 'dismissed']);
+      allow delete: if false;
+    }
+  }
+}

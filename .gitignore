@@ -1,0 +1,9 @@
+node_modules/
+dist/
+e2e-dist/
+*.local
+.firebase/
+*-debug.log
+test-results/
+playwright-report/
+*.zip

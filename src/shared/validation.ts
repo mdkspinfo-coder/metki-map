@@ -22,13 +22,6 @@ export function validateFullName(value: string): string | null {
   return null;
 }
 
-export function validateEmail(value: string): string | null {
-  if (value.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
-    return 'Проверьте адрес почты';
-  }
-  return null;
-}
-
 /** Приводит номер к международному виду. Девять цифр считаются польским номером. */
 export function normalizePhone(value: string): string | null {
   let digits = value.trim().replace(/[\s()\-.]/g, '');

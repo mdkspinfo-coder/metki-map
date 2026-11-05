@@ -21,7 +21,6 @@ function connect() {
   if (isEmulator) {
     connectAuthEmulator(authService, 'http://127.0.0.1:9099', { disableWarnings: true });
     connectFirestoreEmulator(dbService, '127.0.0.1', 8080);
-    authService.settings.appVerificationDisabledForTesting = true;
   }
   return { authService, dbService };
 }

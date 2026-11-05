@@ -21,17 +21,6 @@ export async function resetBackend() {
   });
 }
 
-/** Код, который эмулятор «отправил» по SMS. */
-export async function smsCode(phone: string): Promise<string> {
-  const response = await fetch(`${AUTH}/emulator/v1/projects/${PROJECT}/verificationCodes`);
-  const { verificationCodes } = (await response.json()) as {
-    verificationCodes: { phoneNumber: string; code: string }[];
-  };
-  const match = verificationCodes.filter((item) => item.phoneNumber === phone).at(-1);
-  if (!match) throw new Error(`Нет кода для ${phone}`);
-  return match.code;
-}
-
 /** Назначение модератора: на настоящем проекте это делается вручную в консоли. */
 export async function makeModerator(uid: string) {
   const response = await fetch(
@@ -128,18 +117,9 @@ export async function googleSignIn(page: Page, click: () => Promise<void>, email
   await popup.locator('#sign-in').click();
 }
 
-export async function confirmPhone(page: Page, phone: string) {
-  await page.locator('input[name=phone]').fill(phone);
-  await page.getByRole('button', { name: 'Получить код' }).click();
-  await expect(page.locator('input[name=sms-code]')).toBeVisible();
-  await page.locator('input[name=sms-code]').fill(await smsCode(phone));
-  await page.getByRole('button', { name: 'Подтвердить' }).click();
-}
-
-export async function fillRegistration(page: Page, input: { username: string; fullName: string; email?: string }) {
+export async function fillRegistration(page: Page, input: { username: string; phone: string }) {
   await page.locator('input[name=username]').fill(input.username);
-  await page.locator('input[name=fullName]').fill(input.fullName);
-  if (input.email) await page.locator('input[name=email]').fill(input.email);
+  await page.locator('input[name=phone]').fill(input.phone);
   await page.locator('input[name=consent-data]').check();
   await page.locator('input[name=consent-privacy]').check();
   await page.getByRole('button', { name: 'Отправить на проверку' }).click();

@@ -68,12 +68,13 @@ service cloud.firestore {
         && c.acceptedAt == request.time;
     }
 
-    // Новый профиль. Телефон сверяется с токеном Firebase Auth, а туда он попадает
-    // только после ввода кода из SMS, поэтому подставить чужой номер нельзя.
+    // Новый профиль. Вход только через Google: почта берётся из токена и уже подтверждена.
+    // Телефон человек вводит сам и никто его не проверяет: SMS на бесплатном тарифе недоступны.
+    // Поэтому блокировка держится на почте, а не на номере.
     function validNewProfile(id) {
       let d = request.resource.data;
       let token = request.auth.token;
-      let keys = ['uid', 'username', 'usernameLower', 'fullName', 'email', 'emailVerified',
+      let keys = ['uid', 'username', 'usernameLower', 'fullName', 'email',
                   'phone', 'status', 'createdAt', 'consents'];
       return d.keys().hasOnly(keys)
         && d.keys().hasAll(keys)
@@ -84,13 +85,11 @@ service cloud.firestore {
         && d.username.matches('^[A-Za-z0-9_.]{3,24}$')
         && d.usernameLower == d.username.lower()
         && text(d.fullName, 3, 100)
-        && d.email is string
-        && d.email.size() <= 254
-        && d.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
-        && (token.get('email', null) == null || d.email == token.email)
-        && d.emailVerified == (token.get('email_verified', false) == true)
-        && d.phone == token.phone_number
-        && !exists(/databases/$(database)/documents/blockedPhones/$(d.phone))
+        && d.email == token.email
+        && token.email_verified == true
+        && d.phone is string
+        && d.phone.matches('^\\+[1-9][0-9]{7,14}$')
+        && !exists(/databases/$(database)/documents/blockedEmails/$(d.email))
         && validConsents(d.consents)
         && getAfter(/databases/$(database)/documents/usernames/$(d.usernameLower)).data.uid == id;
     }
@@ -158,8 +157,8 @@ service cloud.firestore {
         && !existsAfter(userPath(request.auth.uid));
     }
 
-    // Номера заблокированных: по ним нельзя зарегистрироваться повторно.
-    match /blockedPhones/{phone} {
+    // Почта заблокированных: с ней нельзя зарегистрироваться повторно.
+    match /blockedEmails/{email} {
       allow read, write: if isModerator();
     }
 

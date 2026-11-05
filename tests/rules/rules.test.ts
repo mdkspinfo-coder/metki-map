@@ -48,7 +48,6 @@ const profile = (uid: string, overrides: Record<string, unknown> = {}) => ({
   usernameLower: 'jan_kowalski',
   fullName: 'Jan Kowalski',
   email: 'jan@example.com',
-  emailVerified: true,
   phone: PHONE,
   status: 'pending',
   createdAt: serverTimestamp(),
@@ -61,7 +60,7 @@ const profile = (uid: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const fullToken = { email: 'jan@example.com', email_verified: true, phone_number: PHONE };
+const fullToken = { email: 'jan@example.com', email_verified: true };
 
 const register = (db: Firestore, uid: string, data: Record<string, unknown>) => {
   const batch = writeBatch(db);
@@ -138,36 +137,29 @@ describe('гость без входа', () => {
 });
 
 describe('регистрация', () => {
-  it('создаёт профиль на проверке при подтверждённом телефоне', async () => {
+  it('создаёт профиль на проверке при входе через Google', async () => {
     await assertSucceeds(register(as('u1', fullToken), 'u1', profile('u1')));
-  });
-
-  it('вход по телефону: почта вводится вручную и считается неподтверждённой', async () => {
-    await assertSucceeds(
-      register(as('u1', { phone_number: PHONE }), 'u1', profile('u1', { emailVerified: false })),
-    );
   });
 
   it('нельзя выдать себя за одобренного', async () => {
     await assertFails(register(as('u1', fullToken), 'u1', profile('u1', { status: 'approved' })));
   });
 
-  it('нельзя зарегистрироваться без подтверждения номера по SMS', async () => {
-    await assertFails(
-      register(as('u1', { email: 'jan@example.com', email_verified: true }), 'u1', profile('u1')),
-    );
-  });
-
-  it('нельзя указать чужой номер', async () => {
-    await assertFails(register(as('u1', fullToken), 'u1', profile('u1', { phone: '+48999999999' })));
+  it('телефон обязателен и проверяется его формат', async () => {
+    for (const phone of ['123', '500100200', '+0123456789', '+48 500 100 200', 48500100200, '']) {
+      await assertFails(register(as('u1', fullToken), 'u1', profile('u1', { phone })));
+    }
   });
 
   it('нельзя подменить почту Google', async () => {
     await assertFails(register(as('u1', fullToken), 'u1', profile('u1', { email: 'boss@example.com' })));
   });
 
-  it('нельзя заявить неподтверждённую почту подтверждённой', async () => {
-    await assertFails(register(as('u1', { phone_number: PHONE }), 'u1', profile('u1')));
+  it('почта должна быть подтверждена Google', async () => {
+    const unverified = { email: 'jan@example.com', email_verified: false };
+    await assertFails(register(as('u1', unverified), 'u1', profile('u1')));
+    await assertFails(register(as('u1', { email: 'jan@example.com' }), 'u1', profile('u1')));
+    await assertFails(register(as('u1'), 'u1', profile('u1')));
   });
 
   it('без обоих согласий регистрация невозможна', async () => {
@@ -190,17 +182,9 @@ describe('регистрация', () => {
 
   it('занятое имя нельзя взять ещё раз, даже в другом регистре', async () => {
     await assertSucceeds(register(as('u1', fullToken), 'u1', profile('u1')));
-    const other = { ...fullToken, phone_number: '+48500100201', email: 'x@example.com' };
+    const other = { email: 'x@example.com', email_verified: true };
     await assertFails(
-      register(
-        as('u2', other),
-        'u2',
-        profile('u2', {
-          username: 'JAN_KOWALSKI',
-          phone: '+48500100201',
-          email: 'x@example.com',
-        }),
-      ),
+      register(as('u2', other), 'u2', profile('u2', { username: 'JAN_KOWALSKI', email: 'x@example.com' })),
     );
   });
 
@@ -426,7 +410,7 @@ describe('модерация', () => {
     await assertFails(updateDoc(doc(db, 'users/u1'), decision('u2', 'approved')));
     await assertFails(updateDoc(doc(db, 'markers/m1'), decision('u2', 'approved')));
     await assertFails(updateDoc(doc(db, 'complaints/m1_u1'), decision('u2', 'resolved')));
-    await assertFails(getDocs(collection(db, 'blockedPhones')));
+    await assertFails(getDocs(collection(db, 'blockedEmails')));
   });
 
   it('жалобы нельзя удалять', async () => {
@@ -436,8 +420,8 @@ describe('модерация', () => {
 });
 
 describe('блокировка и удаление аккаунта', () => {
-  it('заблокированный номер нельзя зарегистрировать снова', async () => {
-    await seed(`blockedPhones/${PHONE}`, { uid: 'old' });
+  it('с заблокированной почтой нельзя зарегистрироваться снова', async () => {
+    await seed('blockedEmails/jan@example.com', { uid: 'old' });
     await assertFails(register(as('u1', fullToken), 'u1', profile('u1')));
   });
 

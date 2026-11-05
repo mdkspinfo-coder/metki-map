@@ -10,7 +10,6 @@ export interface UserProfile {
   usernameLower: string;
   fullName: string;
   email: string;
-  emailVerified: boolean;
   phone: string;
   status: UserStatus;
   createdAt: Timestamp | null;

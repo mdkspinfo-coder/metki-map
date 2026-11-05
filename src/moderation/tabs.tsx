@@ -227,15 +227,10 @@ function AccountCard({ moderatorId, user }: { moderatorId: string; user: UserRow
         <dl className="facts">
           <Fact label="ФИО">{user.fullName}</Fact>
           <Fact label="Почта">
-            {user.email}{' '}
-            {user.emailVerified ? (
-              <BadgeCheck className="ok-icon" size={15} aria-label="подтверждена" />
-            ) : (
-              <span className="tag">не подтверждена</span>
-            )}
+            {user.email} <BadgeCheck className="ok-icon" size={15} aria-label="подтверждена Google" />
           </Fact>
           <Fact label="Телефон">
-            {user.phone} <BadgeCheck className="ok-icon" size={15} aria-label="подтверждён по SMS" />
+            {user.phone} <span className="tag">не проверен</span>
           </Fact>
           <Fact label="Регистрация">{formatDate(user.createdAt)}</Fact>
           <Fact label="Согласия">версия {user.consents?.version ?? 'нет данных'}</Fact>

@@ -4,7 +4,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
-import { BadgeCheck, LogOut, Phone, Trash2 } from 'lucide-react';
+import { LogOut, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { errorMessage } from '../shared/errors';
 import { auth } from '../shared/firebase';
@@ -12,9 +12,8 @@ import { DATA_PROCESSING_CONSENT, PRIVACY_POLICY, type LegalDocument } from '../
 import { Modal } from '../shared/Modal';
 import { SITE } from '../shared/site-config';
 import type { MapMarker, UserProfile } from '../shared/types';
-import { validateEmail, validateFullName, validateUsername } from '../shared/validation';
+import { normalizePhone, validateFullName, validateUsername } from '../shared/validation';
 import { createProfile, deleteAccount, deleteOwnMarker } from './api';
-import { PhoneVerifier } from './PhoneVerifier';
 
 const logOut = () => void signOut(auth);
 
@@ -36,7 +35,6 @@ function LegalDialog({ document: legal, onClose }: { document: LegalDocument; on
 }
 
 export function LoginDialog({ onClose }: { onClose: () => void }) {
-  const [usePhone, setUsePhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -67,14 +65,6 @@ export function LoginDialog({ onClose }: { onClose: () => void }) {
           <GoogleMark />
           Войти через Google
         </button>
-        {usePhone ? (
-          <PhoneVerifier label="Номер телефона" onVerified={onClose} />
-        ) : (
-          <button type="button" className="button button-wide" onClick={() => setUsePhone(true)}>
-            <Phone size={18} aria-hidden />
-            Войти по номеру телефона
-          </button>
-        )}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -111,8 +101,7 @@ function GoogleMark() {
 export function RegisterDialog({ user }: { user: User }) {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState(user.displayName ?? '');
-  const [email, setEmail] = useState(user.email ?? '');
-  const [phoneVerified, setPhoneVerified] = useState(Boolean(user.phoneNumber));
+  const [phone, setPhone] = useState('+48 ');
   const [acceptedData, setAcceptedData] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [legal, setLegal] = useState<LegalDocument | null>(null);
@@ -121,20 +110,20 @@ export function RegisterDialog({ user }: { user: User }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const normalizedPhone = normalizePhone(phone);
     const problem =
       validateUsername(username) ??
       validateFullName(fullName) ??
-      validateEmail(email.trim()) ??
-      (phoneVerified ? null : 'Подтвердите номер телефона кодом из SMS.') ??
+      (normalizedPhone ? null : 'Проверьте номер: например, +48 500 100 200.') ??
       (acceptedData && acceptedPrivacy ? null : 'Для регистрации нужно принять оба документа.');
-    if (problem) {
-      setError(problem);
+    if (problem || !normalizedPhone) {
+      setError(problem ?? '');
       return;
     }
     setBusy(true);
     setError('');
     try {
-      await createProfile(user, { username, fullName, email });
+      await createProfile(user, { username, fullName, phone: normalizedPhone });
       // Окно закроется само: подписка на профиль увидит новый документ.
     } catch (caught) {
       setError(errorMessage(caught));
@@ -168,34 +157,18 @@ export function RegisterDialog({ user }: { user: User }) {
         </label>
         <label className="field">
           <span>Почта</span>
+          <input type="email" name="email" value={user.email ?? ''} readOnly />
+        </label>
+        <label className="field">
+          <span>Телефон</span>
           <input
-            type="email"
-            name="email"
-            autoComplete="email"
-            value={email}
-            readOnly={Boolean(user.email)}
-            onChange={(event) => setEmail(event.target.value)}
+            type="tel"
+            name="phone"
+            autoComplete="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
           />
         </label>
-
-        {phoneVerified ? (
-          <div className="field">
-            <span>Телефон</span>
-            <p className="verified">
-              <BadgeCheck size={18} aria-hidden />
-              {user.phoneNumber ?? 'Номер'} подтверждён
-            </p>
-          </div>
-        ) : (
-          <PhoneVerifier
-            linkTo={user}
-            label="Телефон"
-            onVerified={async () => {
-              await user.reload();
-              setPhoneVerified(true);
-            }}
-          />
-        )}
 
         <label className="check">
           <input

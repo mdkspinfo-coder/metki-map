@@ -19,16 +19,15 @@ import type { MapMarker, UserProfile } from '../shared/types';
 export interface RegistrationInput {
   username: string;
   fullName: string;
-  email: string;
+  /** Номер в международном виде. Он не проверяется: его вводит сам пользователь. */
+  phone: string;
 }
 
 export function createProfile(user: User, input: RegistrationInput): Promise<void> {
   return withNetwork(async () => {
-    // Свежий токен обязателен: номер попадает в него только после подтверждения по SMS,
-    // а правила базы сверяют его с номером в профиле.
-    const { claims } = await user.getIdTokenResult(true);
-    const phone = claims.phone_number;
-    if (typeof phone !== 'string') throw new AppError('Сначала подтвердите номер телефона.');
+    // Правила базы сверяют почту с токеном, поэтому берём её оттуда же.
+    const { claims } = await user.getIdTokenResult();
+    if (typeof claims.email !== 'string') throw new AppError('В аккаунте Google не найдена почта.');
 
     const usernameLower = input.username.toLowerCase();
     const taken = await getDoc(doc(db, 'usernames', usernameLower));
@@ -41,9 +40,8 @@ export function createProfile(user: User, input: RegistrationInput): Promise<voi
       username: input.username,
       usernameLower,
       fullName: input.fullName.trim(),
-      email: typeof claims.email === 'string' ? claims.email : input.email.trim(),
-      emailVerified: claims.email_verified === true,
-      phone,
+      email: claims.email,
+      phone: input.phone,
       status: 'pending',
       createdAt: serverTimestamp(),
       consents: {
@@ -58,7 +56,7 @@ export function createProfile(user: User, input: RegistrationInput): Promise<voi
     } catch (error) {
       if (isPermissionDenied(error)) {
         throw new AppError(
-          'Не удалось зарегистрироваться. Возможно, имя только что заняли или этот номер заблокирован.',
+          'Не удалось зарегистрироваться. Возможно, имя только что заняли или эта почта заблокирована.',
         );
       }
       throw error;

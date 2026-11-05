@@ -307,8 +307,3 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-
-/* Значок reCAPTCHA нельзя скрывать, но он не должен закрывать кнопки справа внизу. */
-.grecaptcha-badge {
-  bottom: 96px !important;
-}

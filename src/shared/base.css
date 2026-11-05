@@ -239,15 +239,6 @@ textarea {
   font-size: 15px;
 }
 
-.verified {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--active);
-  font-size: 14px;
-  font-weight: 600;
-}
-
 /* ---- Модальное окно ---- */
 
 .modal-backdrop {

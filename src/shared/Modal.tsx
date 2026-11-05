@@ -15,8 +15,6 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 /** Открытые окна, верхнее последним: клавиши обрабатывает только оно. */
 const openModals: string[] = [];
 
-// Обычный div вместо <dialog>: нативное модальное окно делает остальную страницу
-// неактивной и перекрывает окно reCAPTCHA, и вход по телефону перестаёт работать.
 export function Modal({ title, children, onClose, wide }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);

@@ -4,7 +4,6 @@ import {
   addButton,
   clickPoint,
   complaintButton,
-  confirmPhone,
   fillRegistration,
   googleSignIn,
   jump,
@@ -18,8 +17,6 @@ import {
   WARSAW,
 } from './helpers';
 
-const ALICE_PHONE = '+48500100200';
-const BOB_PHONE = '+48500100300';
 const XSS_TITLE = '<img src=x onerror="window.__xss=1">Кафе';
 const CAPTION = 'Лучший кофе в районе';
 
@@ -27,6 +24,9 @@ const expectToast = (page: Page, text: string) => expect(page.getByRole('status'
 
 /** Статус метки на экране. Перед проверкой карта показывает окрестности Варшавы. */
 const markerState = async (page: Page) => (await pointsOnMap(page))[0]?.state;
+
+const signIn = (page: Page, email: string, name: string) =>
+  googleSignIn(page, () => page.getByRole('button', { name: 'Войти через Google' }).click(), email, name);
 
 async function placeMarker(page: Page, title: string, caption: string) {
   await addButton(page).click();
@@ -50,34 +50,29 @@ test('полный путь: регистрация, модерация, мет�
   const moderatorContext = await newContext(browser);
   const moderator = await moderatorContext.newPage();
 
-  await test.step('регистрация по телефону: проверки формы', async () => {
+  await test.step('вход только через Google, по телефону войти нельзя', async () => {
     await alice.goto('./');
     await mapReady(alice);
     await account(alice).click();
-    await alice.getByRole('button', { name: 'Войти по номеру телефона' }).click();
-
-    await alice.locator('input[name=phone]').fill('123');
-    await alice.getByRole('button', { name: 'Получить код' }).click();
-    await expect(alice.getByRole('alert')).toContainText('Проверьте номер');
-
-    await alice.locator('input[name=phone]').fill(ALICE_PHONE);
-    await alice.getByRole('button', { name: 'Получить код' }).click();
-    await expect(alice.locator('input[name=sms-code]')).toBeVisible();
-    await alice.locator('input[name=sms-code]').fill('000000');
-    await alice.getByRole('button', { name: 'Подтвердить' }).click();
-    await expect(alice.getByRole('alert')).toContainText('Неверный код');
+    await expect(alice.getByRole('button', { name: 'Войти через Google' })).toBeVisible();
+    await expect(alice.getByRole('button', { name: /по номеру телефона/ })).toHaveCount(0);
   });
 
-  await test.step('верный код открывает регистрацию, без согласий она не проходит', async () => {
-    const { smsCode } = await import('./helpers');
-    await alice.locator('input[name=sms-code]').fill(await smsCode(ALICE_PHONE));
-    await alice.getByRole('button', { name: 'Подтвердить' }).click();
+  await test.step('первый вход открывает регистрацию с данными из Google', async () => {
+    await signIn(alice, 'alice@example.com', 'Алиса Ковальска');
     await expect(alice.getByRole('heading', { name: 'Регистрация' })).toBeVisible();
-    await expect(alice.getByText('подтверждён')).toBeVisible();
+    await expect(alice.locator('input[name=email]')).toHaveValue('alice@example.com');
+    await expect(alice.locator('input[name=email]')).toHaveJSProperty('readOnly', true);
+    await expect(alice.locator('input[name=fullName]')).toHaveValue('Алиса Ковальска');
+  });
 
+  await test.step('форма проверяет телефон и оба согласия', async () => {
     await alice.locator('input[name=username]').fill('alice_k');
-    await alice.locator('input[name=fullName]').fill('Алиса Ковальска');
-    await alice.locator('input[name=email]').fill('alice@example.com');
+    await alice.locator('input[name=phone]').fill('123');
+    await alice.getByRole('button', { name: 'Отправить на проверку' }).click();
+    await expect(alice.getByRole('alert')).toContainText('Проверьте номер');
+
+    await alice.locator('input[name=phone]').fill('500 100 200');
     await alice.getByRole('button', { name: 'Отправить на проверку' }).click();
     await expect(alice.getByRole('alert')).toContainText('оба документа');
 
@@ -114,12 +109,7 @@ test('полный путь: регистрация, модерация, мет�
 
   await test.step('модерация закрыта для посторонних', async () => {
     await moderator.goto('moderation/');
-    await googleSignIn(
-      moderator,
-      () => moderator.getByRole('button', { name: 'Войти через Google' }).click(),
-      'mod@example.com',
-      'Модератор',
-    );
+    await signIn(moderator, 'mod@example.com', 'Модератор');
     await expect(moderator.getByRole('heading', { name: 'Нет доступа' })).toBeVisible();
     await expect(moderator.getByRole('tab')).toHaveCount(0);
   });
@@ -132,8 +122,9 @@ test('полный путь: регистрация, модерация, мет�
     await expect(moderator.getByText('alice_k')).toBeVisible();
     await expect(moderator.getByText('Алиса Ковальска')).toBeVisible();
     await expect(moderator.getByText('alice@example.com')).toBeVisible();
-    await expect(moderator.getByText(ALICE_PHONE)).toBeVisible();
-    await expect(moderator.getByText('не подтверждена')).toBeVisible();
+    // Девять цифр приведены к международному виду, а модератор видит, что номер не проверен.
+    await expect(moderator.getByText('+48500100200')).toBeVisible();
+    await expect(moderator.getByText('не проверен')).toBeVisible();
 
     await moderator.getByRole('button', { name: 'Одобрить' }).click();
     await expect(moderator.getByText('Здесь пока ничего нет.')).toBeVisible();
@@ -229,39 +220,14 @@ test('полный путь: регистрация, модерация, мет�
   const bobContext = await newContext(browser, { ...northOfWarsaw(300), accuracy: 12 });
   const bob = await bobContext.newPage();
 
-  await test.step('регистрация через Google с подтверждением телефона по SMS', async () => {
+  await test.step('занятое имя отклоняется, свободное проходит', async () => {
     await bob.goto('./');
     await mapReady(bob);
     await account(bob).click();
-    await googleSignIn(
-      bob,
-      () => bob.getByRole('button', { name: 'Войти через Google' }).click(),
-      'bob@example.com',
-      'Боб Новак',
-    );
+    await signIn(bob, 'bob@example.com', 'Боб Новак');
     await expect(bob.getByRole('heading', { name: 'Регистрация' })).toBeVisible();
-    await expect(bob.locator('input[name=email]')).toHaveValue('bob@example.com');
-    await expect(bob.locator('input[name=fullName]')).toHaveValue('Боб Новак');
 
-    // Без подтверждённого телефона регистрация не проходит.
-    await bob.locator('input[name=username]').fill('bob_n');
-    await bob.locator('input[name=consent-data]').check();
-    await bob.locator('input[name=consent-privacy]').check();
-    await bob.getByRole('button', { name: 'Отправить на проверку' }).click();
-    await expect(bob.getByRole('alert')).toContainText('Подтвердите номер');
-
-    // Занятый номер даёт понятную ошибку.
-    await confirmPhone(bob, ALICE_PHONE);
-    await expect(bob.getByRole('alert').first()).toContainText('уже привязан');
-    await bob.getByRole('button', { name: 'Изменить номер' }).click();
-
-    await confirmPhone(bob, BOB_PHONE);
-    await expect(bob.getByText('подтверждён')).toBeVisible();
-  });
-
-  await test.step('занятое имя отклоняется, свободное проходит', async () => {
-    await bob.locator('input[name=username]').fill('ALICE_K');
-    await bob.getByRole('button', { name: 'Отправить на проверку' }).click();
+    await fillRegistration(bob, { username: 'ALICE_K', phone: '+48 500 100 300' });
     await expect(bob.getByRole('alert')).toContainText('уже занято');
 
     await bob.locator('input[name=username]').fill('bob_n');
@@ -365,7 +331,7 @@ test('полный путь: регистрация, модерация, мет�
     await expect(moderator.getByText('alice_k')).toHaveCount(0);
   });
 
-  await test.step('заблокированный номер нельзя зарегистрировать заново', async () => {
+  await test.step('повторный вход той же почтой снова показывает блокировку', async () => {
     await bob.getByRole('button', { name: 'Выйти' }).click();
     await expect(bob.getByRole('heading', { name: 'Аккаунт заблокирован' })).toHaveCount(0);
 
@@ -374,16 +340,8 @@ test('полный путь: регистрация, модерация, мет�
     await page.goto('./');
     await mapReady(page);
     await account(page).click();
-    await googleSignIn(
-      page,
-      () => page.getByRole('button', { name: 'Войти через Google' }).click(),
-      'bob2@example.com',
-      'Боб Второй',
-    );
-    await expect(page.getByRole('heading', { name: 'Регистрация' })).toBeVisible();
-    // Номер уже привязан к заблокированному аккаунту: новый аккаунт на него не оформить.
-    await confirmPhone(page, BOB_PHONE);
-    await expect(page.getByRole('alert').first()).toContainText('уже привязан');
+    await signIn(page, 'bob@example.com', 'Боб Новак');
+    await expect(page.getByRole('heading', { name: 'Аккаунт заблокирован' })).toBeVisible();
     await fresh.close();
   });
 
@@ -412,8 +370,7 @@ test('телефон: кнопки не перекрываются и окна �
   expect(noPageScroll).toBe(true);
 
   await account(page).click();
-  await page.getByRole('button', { name: 'Войти по номеру телефона' }).click();
-  await confirmPhone(page, '+48500100900');
+  await signIn(page, 'mobile@example.com', 'Иван Иванов');
   await expect(page.getByRole('heading', { name: 'Регистрация' })).toBeVisible();
   await page.screenshot({ path: 'test-results/mobile-register.png' });
 
@@ -421,7 +378,7 @@ test('телефон: кнопки не перекрываются и окна �
   expect(dialog?.width).toBeLessThanOrEqual(375);
   expect((dialog?.y ?? 0) + (dialog?.height ?? 0)).toBeLessThanOrEqual(667);
 
-  await fillRegistration(page, { username: 'mobile_user', fullName: 'Иван Иванов', email: 'i@example.com' });
+  await fillRegistration(page, { username: 'mobile_user', phone: '+48 500 100 900' });
   await expect(page.getByRole('heading', { name: 'Аккаунт на проверке' })).toBeVisible();
   await page.screenshot({ path: 'test-results/mobile-pending.png' });
   await context.close();

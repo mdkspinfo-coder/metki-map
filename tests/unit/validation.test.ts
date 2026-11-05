@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AppError, errorMessage, withNetwork } from '../../src/shared/errors';
-import {
-  normalizePhone,
-  validateEmail,
-  validateFullName,
-  validateUsername,
-} from '../../src/shared/validation';
+import { normalizePhone, validateFullName, validateUsername } from '../../src/shared/validation';
 
 describe('normalizePhone', () => {
   it('понимает разные записи польского номера', () => {
@@ -40,18 +35,11 @@ describe('поля регистрации', () => {
     expect(validateFullName('  ')).not.toBeNull();
     expect(validateFullName('x'.repeat(101))).not.toBeNull();
   });
-
-  it('почта', () => {
-    expect(validateEmail('a@b.pl')).toBeNull();
-    expect(validateEmail('a@b')).not.toBeNull();
-    expect(validateEmail('a b@c.pl')).not.toBeNull();
-    expect(validateEmail('')).not.toBeNull();
-  });
 });
 
 describe('ошибки', () => {
   it('переводит коды Firebase', () => {
-    expect(errorMessage({ code: 'auth/invalid-verification-code' })).toBe('Неверный код из SMS.');
+    expect(errorMessage({ code: 'auth/popup-closed-by-user' })).toBe('Окно входа было закрыто.');
   });
 
   it('показывает готовый текст AppError', () => {

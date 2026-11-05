@@ -20,12 +20,12 @@ export const setMarkerStatus = (moderatorId: string, id: string, status: MarkerS
 export const setComplaintStatus = (moderatorId: string, id: string, status: ComplaintStatus) =>
   withNetwork(() => updateDoc(doc(db, 'complaints', id), decision(moderatorId, status)));
 
-/** Блокировка закрывает и номер телефона, чтобы нельзя было зарегистрироваться заново. */
+/** Блокировка закрывает и почту, чтобы нельзя было зарегистрироваться заново. */
 export const banUser = (moderatorId: string, user: UserProfile, reason?: string) =>
   withNetwork(async () => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'users', user.uid), decision(moderatorId, 'banned', reason));
-    batch.set(doc(db, 'blockedPhones', user.phone), { uid: user.uid, blockedBy: moderatorId });
+    batch.set(doc(db, 'blockedEmails', user.email), { uid: user.uid, blockedBy: moderatorId });
     await batch.commit();
   });
 
@@ -33,7 +33,7 @@ export const unbanUser = (moderatorId: string, user: UserProfile) =>
   withNetwork(async () => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'users', user.uid), decision(moderatorId, 'approved'));
-    batch.delete(doc(db, 'blockedPhones', user.phone));
+    batch.delete(doc(db, 'blockedEmails', user.email));
     await batch.commit();
   });
 

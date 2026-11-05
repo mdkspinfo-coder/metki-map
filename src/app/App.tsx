@@ -373,9 +373,6 @@ export function App() {
         />
       )}
 
-      {/* Вне диалогов: контейнер reCAPTCHA не должен исчезать вместе с окном. */}
-      <div id="recaptcha-root" />
-
       {toast && (
         <p className="toast" role="status">
           {toast}

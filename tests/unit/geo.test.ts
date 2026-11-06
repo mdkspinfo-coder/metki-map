@@ -5,6 +5,7 @@ import {
   computeActiveIds,
   distanceMeters,
   formatDistance,
+  MAX_USABLE_ACCURACY_M,
   pointInRing,
   sameIds,
   shouldAcceptFix,
@@ -33,8 +34,8 @@ describe('distanceMeters', () => {
 });
 
 describe('computeActiveIds', () => {
-  it('метка внутри 800 м зелёная, снаружи нет', () => {
-    const active = computeActiveIds([marker('near', 799), marker('far', 801)], WARSAW, new Set());
+  it('метка внутри 200 м зелёная, снаружи нет', () => {
+    const active = computeActiveIds([marker('near', 199), marker('far', 201)], WARSAW, new Set());
     expect([...active]).toEqual(['near']);
   });
 
@@ -58,12 +59,16 @@ describe('computeActiveIds', () => {
   });
 
   it('дрожание GPS на границе не выключает зелёную метку', () => {
-    expect(computeActiveIds([marker('a', 810)], WARSAW, new Set(['a'])).has('a')).toBe(true);
-    expect(computeActiveIds([marker('a', 810)], WARSAW, new Set()).has('a')).toBe(false);
+    expect(computeActiveIds([marker('a', 210)], WARSAW, new Set(['a'])).has('a')).toBe(true);
+    expect(computeActiveIds([marker('a', 210)], WARSAW, new Set()).has('a')).toBe(false);
   });
 
   it('за пределами запаса метка гаснет', () => {
-    expect(computeActiveIds([marker('a', 825)], WARSAW, new Set(['a'])).has('a')).toBe(false);
+    expect(computeActiveIds([marker('a', 225)], WARSAW, new Set(['a'])).has('a')).toBe(false);
+  });
+
+  it('точность, которой верим, заметно меньше радиуса', () => {
+    expect(MAX_USABLE_ACCURACY_M).toBeLessThan(ACTIVATION_RADIUS_M / 2);
   });
 });
 

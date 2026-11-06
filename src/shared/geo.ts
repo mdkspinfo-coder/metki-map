@@ -1,5 +1,5 @@
 /** Радиус, в котором метка становится зелёной. */
-export const ACTIVATION_RADIUS_M = 800;
+export const ACTIVATION_RADIUS_M = 200;
 
 /**
  * Запас на выход из радиуса. GPS дрожит на несколько метров, и без запаса метка
@@ -7,8 +7,11 @@ export const ACTIVATION_RADIUS_M = 800;
  */
 export const DEACTIVATION_MARGIN_M = 20;
 
-/** Хуже этой точности координатам нельзя верить: так определяют по вышкам и Wi-Fi. */
-export const MAX_USABLE_ACCURACY_M = 150;
+/**
+ * Хуже этой точности координатам нельзя верить: так определяют по вышкам и Wi-Fi.
+ * Порог должен быть заметно меньше радиуса, иначе метка загоралась бы далеко от человека.
+ */
+export const MAX_USABLE_ACCURACY_M = 75;
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const toRad = (deg: number) => (deg * Math.PI) / 180;

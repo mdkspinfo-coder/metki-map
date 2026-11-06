@@ -9,5 +9,5 @@ export const SITE = {
   /** Почта для обращений пользователей. */
   contactEmail: 'mdkspinfo@gmail.com',
   /** Меняйте при правке документов: версия сохраняется вместе с согласием. */
-  legalVersion: '2026-11-05',
+  legalVersion: '2026-11-06',
 } as const;

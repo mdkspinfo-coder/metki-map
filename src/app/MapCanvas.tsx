@@ -53,6 +53,9 @@ const polygon = (ring: [number, number][]): GeoJSON.Feature => ({
   geometry: { type: 'Polygon', coordinates: [ring] },
 });
 
+/** Размер метки на экране один и тот же при любом масштабе карты. */
+const MARKER_RADIUS_PX = 6;
+
 /** На этом зуме в данных карты появляются все здания. */
 const BUILDINGS_ZOOM = 14;
 
@@ -132,7 +135,7 @@ function setupOverlays(map: MapLibre) {
     source: 'points',
     filter: ['==', ['get', 'state'], 'active'],
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 13, 16, 22],
+      'circle-radius': MARKER_RADIUS_PX * 2,
       'circle-color': '#15924a',
       'circle-opacity': 0.24,
     },
@@ -145,7 +148,7 @@ function setupOverlays(map: MapLibre) {
       'circle-sort-key': ['match', ['get', 'state'], 'active', 2, 'pending', 1, 0],
     },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 7, 16, 11],
+      'circle-radius': MARKER_RADIUS_PX,
       'circle-color': [
         'match',
         ['get', 'state'],
@@ -156,7 +159,7 @@ function setupOverlays(map: MapLibre) {
         '#5f6f80',
       ],
       'circle-stroke-color': '#ffffff',
-      'circle-stroke-width': 2.5,
+      'circle-stroke-width': 2,
     },
   });
   map.addLayer({

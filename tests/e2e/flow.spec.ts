@@ -2,8 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   account,
   addButton,
+  approveOnlyUser,
   clickPoint,
   complaintButton,
+  complaintMarkerIds,
   fillRegistration,
   googleSignIn,
   jump,
@@ -14,6 +16,7 @@ import {
   northOfWarsaw,
   pointsOnMap,
   resetBackend,
+  seedApprovedMarker,
   WARSAW,
 } from './helpers';
 
@@ -186,19 +189,19 @@ test('полный путь: регистрация, модерация, мет�
     await alice.screenshot({ path: 'test-results/marker-popup.png' });
   });
 
-  await test.step('при уходе за 800 м метка гаснет, окно и кнопка жалоб исчезают', async () => {
-    await aliceContext.setGeolocation({ ...northOfWarsaw(900), accuracy: 10 });
+  await test.step('при уходе за 200 м метка гаснет, окно и кнопка жалоб исчезают', async () => {
+    await aliceContext.setGeolocation({ ...northOfWarsaw(300), accuracy: 10 });
     await expect.poll(() => markerState(alice)).toBe('idle');
     await expect(alice.locator('.marker-popup')).toHaveCount(0);
     await expect(complaintButton(alice)).toHaveCount(0);
 
     await clickPoint(alice, WARSAW.longitude, WARSAW.latitude);
-    await expectToast(alice, 'До метки 900 м');
+    await expectToast(alice, 'До метки 300 м');
     await expect(alice.locator('.marker-popup')).toHaveCount(0);
   });
 
   await test.step('на границе радиуса метка снова активируется', async () => {
-    await aliceContext.setGeolocation({ ...northOfWarsaw(790), accuracy: 10 });
+    await aliceContext.setGeolocation({ ...northOfWarsaw(190), accuracy: 10 });
     await expect.poll(() => markerState(alice)).toBe('active');
     await expect(complaintButton(alice)).toBeVisible();
   });
@@ -217,7 +220,7 @@ test('полный путь: регистрация, модерация, мет�
     await expect(alice.locator('.gps-chip')).toHaveCount(0);
   });
 
-  const bobContext = await newContext(browser, { ...northOfWarsaw(300), accuracy: 12 });
+  const bobContext = await newContext(browser, { ...northOfWarsaw(150), accuracy: 12 });
   const bob = await bobContext.newPage();
 
   await test.step('занятое имя отклоняется, свободное проходит', async () => {
@@ -349,6 +352,62 @@ test('полный путь: регистрация, модерация, мет�
   await aliceContext.close();
   await bobContext.close();
   await moderatorContext.close();
+});
+
+test('несколько зелёных меток: жалоба даёт выбрать нужную', async ({ browser }) => {
+  await resetBackend();
+  const context = await newContext(browser);
+  const page = await context.newPage();
+  await page.goto('./');
+  await mapReady(page);
+  await account(page).click();
+  await signIn(page, 'choice@example.com', 'Анна Новак');
+  await expect(page.getByRole('heading', { name: 'Регистрация' })).toBeVisible();
+  await fillRegistration(page, { username: 'anna_n', phone: '+48 500 100 700' });
+  await expect(page.getByRole('heading', { name: 'Аккаунт на проверке' })).toBeVisible();
+
+  const near = northOfWarsaw(50);
+  await seedApprovedMarker('near', 'Ближняя', 'Первая надпись', near);
+  await seedApprovedMarker('second', 'Вторая рядом', 'Вторая надпись', northOfWarsaw(150));
+  await seedApprovedMarker('distant', 'Далёкая', 'Третья надпись', northOfWarsaw(400));
+  await approveOnlyUser();
+  await expect(page.getByRole('heading', { name: 'Аккаунт на проверке' })).toHaveCount(0);
+  await mapReady(page);
+
+  const options = page.getByRole('radio');
+
+  await test.step('список содержит только зелёные метки, ничего не выбрано заранее', async () => {
+    await expect(complaintButton(page)).toBeVisible();
+    await complaintButton(page).click();
+    await expect(options).toHaveCount(2);
+    await expect(page.getByRole('radio', { checked: true })).toHaveCount(0);
+    await expect(page.getByText('Далёкая')).toHaveCount(0);
+    await page.screenshot({ path: 'test-results/complaint-choice.png' });
+  });
+
+  await test.step('без выбора метки жалоба не отправляется', async () => {
+    await page.locator('textarea[name=complaint]').fill('Здесь неверная информация');
+    await page.getByRole('button', { name: 'Отправить жалобу' }).click();
+    await expect(page.getByRole('alert')).toContainText('Выберите метку');
+    expect(await complaintMarkerIds()).toEqual([]);
+  });
+
+  await test.step('жалоба уходит именно на выбранную метку', async () => {
+    await page.getByRole('radio', { name: /Вторая рядом/ }).check();
+    await page.getByRole('button', { name: 'Отправить жалобу' }).click();
+    await expectToast(page, 'Жалоба отправлена');
+    await expect.poll(complaintMarkerIds).toEqual(['second']);
+  });
+
+  await test.step('открытая на карте метка выбрана заранее', async () => {
+    await jump(page, near.longitude, near.latitude, 17, 0);
+    await clickPoint(page, near.longitude, near.latitude);
+    await expect(page.locator('.marker-popup-title')).toHaveText('Ближняя');
+    await complaintButton(page).click();
+    await expect(page.getByRole('radio', { name: /Ближняя/ })).toBeChecked();
+  });
+
+  await context.close();
 });
 
 test('телефон: кнопки не перекрываются и окна умещаются на экране', async ({ browser }) => {

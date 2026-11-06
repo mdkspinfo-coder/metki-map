@@ -206,7 +206,9 @@ export function App() {
   const [complaintList, setComplaintList] = useState(activeMarkers);
   const openComplaint = () => {
     setComplaintList(activeMarkers);
-    setComplaintFor(selected && activeIds.has(selected.id) ? selected.id : activeMarkers[0].id);
+    // Если меток несколько, человек выбирает сам: заранее отмечена только открытая им метка.
+    const opened = selected && activeIds.has(selected.id) ? selected.id : '';
+    setComplaintFor(activeMarkers.length === 1 ? activeMarkers[0].id : opened);
   };
 
   const showOwnMarker = (marker: MapMarker) => {
@@ -360,7 +362,7 @@ export function App() {
         />
       )}
 
-      {complaintFor && uid && (
+      {complaintFor !== null && uid && (
         <ComplaintDialog
           uid={uid}
           candidates={complaintList}

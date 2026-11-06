@@ -78,6 +78,7 @@ interface ComplaintDialogProps {
   uid: string;
   /** Зелёные метки на момент открытия, ближайшая первой. */
   candidates: (MapMarker & { distance: number })[];
+  /** Пустая строка: меток несколько, и человек выбирает сам. */
   initialId: string;
   onClose: () => void;
   onSent: () => void;
@@ -92,6 +93,10 @@ export function ComplaintDialog({ uid, candidates, initialId, onClose, onSent }:
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!markerId) {
+      setError('Выберите метку, на которую жалуетесь.');
+      return;
+    }
     if (text.trim().length < LIMITS.complaint.min) {
       setError(`Опишите проблему подробнее: минимум ${LIMITS.complaint.min} символов.`);
       return;
@@ -111,16 +116,25 @@ export function ComplaintDialog({ uid, candidates, initialId, onClose, onSent }:
     <Modal title="Жалоба на метку" onClose={onClose}>
       <form className="form" onSubmit={(event) => void submit(event)} noValidate>
         {candidates.length > 1 ? (
-          <label className="field">
-            <span>Метка</span>
-            <select name="marker" value={markerId} onChange={(event) => setMarkerId(event.target.value)}>
-              {candidates.map((marker) => (
-                <option key={marker.id} value={marker.id}>
-                  {marker.title} ({formatDistance(marker.distance)})
-                </option>
-              ))}
-            </select>
-          </label>
+          <fieldset className="marker-choice">
+            <legend>На какую метку жалоба?</legend>
+            {candidates.map((marker) => (
+              <label key={marker.id} className="marker-option">
+                <input
+                  type="radio"
+                  name="marker"
+                  value={marker.id}
+                  checked={markerId === marker.id}
+                  onChange={() => setMarkerId(marker.id)}
+                />
+                <span className="marker-option-text">
+                  <strong>{marker.title}</strong>
+                  <small>{marker.caption}</small>
+                  <small>{formatDistance(marker.distance)} от вас</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
         ) : (
           <p className="complaint-target">{selected?.title}</p>
         )}

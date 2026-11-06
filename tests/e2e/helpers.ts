@@ -34,6 +34,57 @@ export async function makeModerator(uid: string) {
   expect(response.ok).toBe(true);
 }
 
+const DOCUMENTS = `${STORE}/v1/projects/${PROJECT}/databases/(default)/documents`;
+const ADMIN = { Authorization: 'Bearer owner', 'Content-Type': 'application/json' };
+
+/** Готовая метка в базе, в обход модерации. */
+export async function seedApprovedMarker(
+  id: string,
+  title: string,
+  caption: string,
+  position: { latitude: number; longitude: number },
+) {
+  const response = await fetch(`${DOCUMENTS}/markers?documentId=${id}`, {
+    method: 'POST',
+    headers: ADMIN,
+    body: JSON.stringify({
+      fields: {
+        title: { stringValue: title },
+        caption: { stringValue: caption },
+        lat: { doubleValue: position.latitude },
+        lng: { doubleValue: position.longitude },
+        ownerId: { stringValue: 'someone-else' },
+        status: { stringValue: 'approved' },
+        createdAt: { timestampValue: new Date().toISOString() },
+      },
+    }),
+  });
+  expect(response.ok).toBe(true);
+}
+
+/** Одобряет единственный профиль в базе так же, как это сделал бы модератор. */
+export async function approveOnlyUser() {
+  const list = (await (await fetch(`${DOCUMENTS}/users`, { headers: ADMIN })).json()) as {
+    documents: { name: string }[];
+  };
+  expect(list.documents).toHaveLength(1);
+  const uid = list.documents[0].name.split('/').at(-1);
+  const response = await fetch(`${DOCUMENTS}/users/${uid}?updateMask.fieldPaths=status`, {
+    method: 'PATCH',
+    headers: ADMIN,
+    body: JSON.stringify({ fields: { status: { stringValue: 'approved' } } }),
+  });
+  expect(response.ok).toBe(true);
+}
+
+/** На какие метки поданы жалобы. */
+export async function complaintMarkerIds(): Promise<string[]> {
+  const list = (await (await fetch(`${DOCUMENTS}/complaints`, { headers: ADMIN })).json()) as {
+    documents?: { fields: { markerId: { stringValue: string } } }[];
+  };
+  return (list.documents ?? []).map((item) => item.fields.markerId.stringValue);
+}
+
 export async function newContext(
   browser: Browser,
   geolocation: { latitude: number; longitude: number; accuracy?: number } = { ...WARSAW, accuracy: 10 },

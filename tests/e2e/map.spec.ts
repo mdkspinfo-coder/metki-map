@@ -104,6 +104,23 @@ test('после прокрутки вокруг Земли 3D остаётся 
     .toBeGreaterThan(20);
 });
 
+test('размер метки не зависит от масштаба карты', async ({ page }) => {
+  await page.goto('./');
+  await mapReady(page);
+  const radius = (layer: string) =>
+    page.evaluate(
+      (id) =>
+        (window as never as { __map: { getPaintProperty(l: string, p: string): unknown } }).__map.getPaintProperty(
+          id,
+          'circle-radius',
+        ),
+      layer,
+    );
+  // Простое число, а не выражение от зума: значит, размер один на любом масштабе.
+  expect(await radius('points-dot')).toBe(6);
+  expect(await radius('points-halo')).toBe(12);
+});
+
 test('гость: кнопки на месте, жалоб нет, метки ставить нельзя', async ({ browser }) => {
   const context = await newContext(browser);
   const page = await context.newPage();
